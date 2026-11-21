@@ -1,34 +1,50 @@
+//! Finding inputs where a one-step change flips the outcome.
+
 use std::collections::BTreeMap;
 
 use crate::model::{Outcome, Pipeline, Value};
 use crate::partition::{compile_partition, CoordSpan, LeafRegion, Partition};
 
-/// Minimal single-coordinate perturbation `(input_a, input_b)` across a decision boundary.
+/// Two inputs one step apart on a single field that get different outcomes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CliffEdge {
+    /// Position of the field that differs.
     pub field_index: usize,
+    /// Name of the field that differs.
     pub field_name: String,
+    /// The first input (for integers, the lower value).
     pub input_a: Vec<Value>,
+    /// Outcome for `input_a`.
     pub outcome_a: Outcome,
+    /// Rule that matched `input_a` (`None` for the default).
     pub rule_a: Option<String>,
+    /// The second input, equal to `input_a` except on `field_index`.
     pub input_b: Vec<Value>,
+    /// Outcome for `input_b`.
     pub outcome_b: Outcome,
+    /// Rule that matched `input_b` (`None` for the default).
     pub rule_b: Option<String>,
+    /// Absolute difference between the two severities.
     pub severity_delta: u8,
-    /// True when `|severity(outcome_a) - severity(outcome_b)| >= 2` across a 1-step boundary.
+    /// True when `severity_delta >= 2`: one step skips at least one severity level.
     pub unbuffered_seam: bool,
 }
 
-/// Discovers canonical minimal-perturbation cliff-edges across all decision boundaries of `pipeline`.
+/// Finds pairs of inputs, one step apart on a single field, that get different outcomes.
 ///
-/// Two inputs form a cliff-edge when they are identical on `n - 1` coordinates, differ by an
-/// atomic step (`|x_k - x'_k| == 1` for integers, `false`/`true` for booleans, or a single variant
-/// swap for enums) on coordinate `k`, and produce distinct outcomes.
+/// A step is `+1` on an integer, `false` to `true` on a bool, or any change of variant on
+/// an enum (enums have no order). All other fields stay the same.
+///
+/// Every such pair is covered, but only one example is returned per combination of
+/// (field, outcome and rule before, outcome and rule after). Results are sorted by
+/// `severity_delta`, largest first. The cost grows with the square of the number of
+/// regions in the partition.
 pub fn find_cliffs(pipeline: &Pipeline) -> Vec<CliffEdge> {
     let part = compile_partition(pipeline);
     find_cliffs_in_partition(pipeline, &part)
 }
 
+/// Like [`find_cliffs`], but reuses a partition from [`compile_partition`] for `pipeline`.
 pub fn find_cliffs_in_partition(pipeline: &Pipeline, part: &Partition) -> Vec<CliffEdge> {
     let n_fields = part.schema.fields.len();
     let n_regs = part.regions.len();

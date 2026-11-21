@@ -12,14 +12,19 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
+          toolchain: stable
           components: clippy, rustfmt
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Clippy (strict)
         run: cargo clippy --all-targets -- -D warnings
+      - name: Debug test suite (runs the debug_assert witness checks)
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo test
       - name: Release test suite and hygiene gate
         env:
           RUSTFLAGS: -D warnings
@@ -31,7 +36,18 @@ jobs:
           cargo doc --no-deps --all-features
           cargo package --locked
       - name: Independent Python CLI cross-check
-        run: python3 scripts/crosscheck.py
+        run: python3 -I scripts/crosscheck.py
+
+  msrv:
+    name: MSRV (Rust 1.81)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: "1.81"
+      - name: Build and test on the minimum supported Rust version
+        run: cargo test --locked
 
   lean:
     name: Lean proof replay
@@ -39,10 +55,10 @@ jobs:
     env:
       MATHLIB_REF: v4.33.1
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Install elan
         run: |
-          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o "$RUNNER_TEMP/elan-init.sh"
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.4.0/elan-init.sh -o "$RUNNER_TEMP/elan-init.sh"
           sh "$RUNNER_TEMP/elan-init.sh" -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       - name: Fetch Mathlib and its prebuilt cache

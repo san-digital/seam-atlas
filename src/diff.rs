@@ -1,33 +1,52 @@
+//! Comparing two versions of a policy.
+
 use std::collections::BTreeMap;
 
 use crate::model::{Outcome, Pipeline, Pred, Value};
 use crate::partition::{eval_pred_on_box, split_box_for_pred, CoordSpan, TriEval};
 
-/// Canonical equivalence class of inputs whose behavior changed from `old` to `new`.
+/// One group of inputs whose outcome changed, keyed by the old outcome and rule and the
+/// new outcome and rule.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiffClass {
+    /// Outcome under the old policy.
     pub old_outcome: Outcome,
+    /// Rule that matched in the old policy (`None` for the default).
     pub old_rule: Option<String>,
+    /// Outcome under the new policy.
     pub new_outcome: Outcome,
+    /// Rule that matched in the new policy (`None` for the default).
     pub new_rule: Option<String>,
+    /// Number of internal regions merged into this group.
     pub region_count: usize,
+    /// Number of inputs in this group.
     pub point_volume: u128,
+    /// One input from this group. Evaluating it with both policies reproduces the change.
     pub witness: Vec<Value>,
 }
 
-/// Complete behavioral diff report across 100% of the shared input `Schema`.
+/// Result of [`diff_pipelines`]. The volumes count inputs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiffReport {
+    /// True when no input changes outcome.
     pub is_equivalent: bool,
+    /// Number of inputs checked (all of them).
     pub total_volume: u128,
+    /// Inputs with the same outcome in both policies.
     pub unchanged_volume: u128,
+    /// Inputs whose outcome changed.
     pub changed_volume: u128,
+    /// The changed inputs, grouped, largest group first.
     pub classes: Vec<DiffClass>,
 }
 
-/// Computes an exhaustive behavioral diff between `old` and `new` over their shared `Schema`.
+/// Compares `old` and `new` on every input and groups the inputs whose outcome changed.
 ///
-/// Returns `None` if `old.schema != new.schema`.
+/// An input counts as changed when its outcome (label or severity) differs. Inputs that
+/// keep the same outcome through a different rule count as unchanged.
+///
+/// Returns `None` if the two policies do not declare identical fields (same names, types,
+/// ranges and enum variant order, in the same order).
 pub fn diff_pipelines(old: &Pipeline, new: &Pipeline) -> Option<DiffReport> {
     if old.schema != new.schema {
         return None;

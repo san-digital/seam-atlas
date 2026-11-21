@@ -1,8 +1,12 @@
+//! JSON output for the CLI's `--json` flag.
+
 use crate::cliffs::CliffEdge;
 use crate::diff::DiffReport;
 use crate::model::{Domain, Schema, Value};
 
-/// Renders cliff-edge witness pairs as deterministic JSON test vectors for CI regression suites.
+/// Renders cliff edges as JSON, for example to store as regression test cases.
+///
+/// Output is deterministic for a given policy. Inputs are objects keyed by field name.
 pub fn cliffs_to_json(schema: &Schema, cliffs: &[CliffEdge]) -> String {
     let mut out = String::from("{\n  \"cliff_edges\": [\n");
     for (i, c) in cliffs.iter().enumerate() {
@@ -49,7 +53,10 @@ pub fn cliffs_to_json(schema: &Schema, cliffs: &[CliffEdge]) -> String {
     out
 }
 
-/// Renders an exhaustive behavioral diff report as deterministic JSON.
+/// Renders a diff report as JSON.
+///
+/// The volume fields are strings, because counts above 2^53 do not survive a round
+/// trip through many JSON parsers as numbers.
 pub fn diff_to_json(schema: &Schema, diff: &DiffReport) -> String {
     let mut out = String::from("{\n");
     out.push_str(&format!("  \"is_equivalent\": {},\n", diff.is_equivalent));

@@ -1,16 +1,18 @@
 import SeamAtlas.PartitionSoundness
 
 /-!
-# Discrete Cliff-Edge and Unbuffered Severity Seam Theorems
+# Facts about chains of one-step changes
 
-Formalizes minimal-perturbation boundary transitions (`src/cliffs.rs`):
-1. Any discrete walk `x_0, x_1, ..., x_k` connecting two states with distinct outcomes
-   must cross at least one adjacent boundary edge `(x_i, x_{i+1})` where the outcome flips.
-2. Along any walk of `k >= 1` unit steps whose endpoints satisfy
-   `sev(end) - sev(start) >= k * delta`, at least one single step jumps by `>= delta`.
-3. If a policy defines no intermediate outcomes with severity strictly between `low` and `high`
-   (`high - low >= 2`), then every walk from a `low`-severity state to a `high`-severity state
-   must traverse an unbuffered cliff edge of severity jump `>= 2`.
+General lemmas behind the idea of a cliff edge (`src/cliffs.rs`). They hold for any step
+relation `R` and say nothing about whether `find_cliffs` reports every edge.
+
+1. Any walk `x_0, x_1, ..., x_k` between two inputs with different outcomes contains a
+   step `(x_i, x_{i+1})` where the outcome changes.
+2. Along a walk of `k >= 1` steps with `sev(end) - sev(start) >= k * delta`, some single
+   step rises by at least `delta`.
+3. If no input has a severity strictly between `low` and `high` (`high - low >= 2`), every
+   walk from severity at most `low` to severity at least `high` has a step that rises by
+   at least 2.
 -/
 
 namespace SeamAtlas
@@ -39,8 +41,8 @@ theorem exists_outcome_flip_on_walk {α β : Type*} (R : α → α → Prop) (f 
         exact exists_outcome_flip_on_walk R f y ys hchain hne
       · exact ⟨x, y, hr, hxy⟩
 
-/-- Pigeonhole cliff-jump bound: if `sev(end) - sev(start) >= xs.length * delta` across
-a non-empty walk, at least one single step jumps in severity by at least `delta`. -/
+/-- If `sev(end) - sev(start) >= xs.length * delta` across a non-empty walk, some single
+step rises in severity by at least `delta`. -/
 theorem exists_large_severity_step {α : Type*} (R : α → α → Prop) (sev : α → ℤ) (delta : ℤ) :
     ∀ (x : α) (xs : List α),
       xs ≠ [] →
@@ -61,10 +63,9 @@ theorem exists_large_severity_step {α : Type*} (R : α → α → Prop) (sev : 
           linarith
         exact exists_large_severity_step R sev delta y (z :: zs) (List.cons_ne_nil z zs) hchain htail_bound
 
-/-- Unbuffered seam inevitability: if a policy omits intermediate severities strictly between
-`low` and `high` (`low + 2 <= high`), then ANY path of unit perturbations from a state with
-severity `<= low` to a state with severity `>= high` must cross a single-step unbuffered cliff
-jumping by at least `2` severity levels. -/
+/-- If no input has a severity strictly between `low` and `high` (`low + 2 <= high`), then
+every walk from severity `<= low` to severity `>= high` has a single step that rises by
+at least 2. -/
 theorem unbuffered_cliff_of_missing_intermediate {α : Type*}
     (R : α → α → Prop) (sev : α → ℤ) {low high : ℤ}
     (hgap : low + 2 ≤ high)

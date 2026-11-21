@@ -1,5 +1,11 @@
-# Clinical paracetamol single-intake guardrail (v2: buffered supratherapeutic and hepatic bands)
-pipeline paracetamol_triage
+# ILLUSTRATIVE EXAMPLE ONLY. NOT CLINICAL GUIDANCE.
+# A made-up dose triage for a fictional medicine. The thresholds are invented to
+# show what `seam-atlas` reports. Do not use them for real decisions.
+#
+# v2 adds Caution and Abstain bands below the Emergency threshold. `cliffs` still
+# reports some jumps of two or more levels for v2 (a change of unit, for example),
+# so extra bands alone do not remove every cliff.
+pipeline dose_triage
 default Routine severity=0
 
 field age_years int 0..120

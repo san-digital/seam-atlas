@@ -1,5 +1,10 @@
-# Clinical paracetamol single-intake guardrail (v1: unbuffered sub-cutoff gap)
-pipeline paracetamol_triage
+# ILLUSTRATIVE EXAMPLE ONLY. NOT CLINICAL GUIDANCE.
+# A made-up dose triage for a fictional medicine. The thresholds are invented to
+# show what `seam-atlas cliffs` reports. Do not use them for real decisions.
+#
+# v1 is deliberately flawed: from age 1 upwards nothing sits between Routine and
+# Emergency, so one extra mg, or a change of unit, can jump three severity levels.
+pipeline dose_triage
 default Routine severity=0
 
 field age_years int 0..120

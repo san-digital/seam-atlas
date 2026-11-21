@@ -142,3 +142,96 @@ fn cli_rejects_unknown_options() {
         .unwrap();
     assert_eq!(status.status.code(), Some(2));
 }
+
+#[test]
+fn ambiguous_guards_and_attributes_are_rejected() {
+    let base = "pipeline p\ndefault A severity=0\nfield role enum a,b\n";
+
+    // An empty list used to parse as "never matches" (or "always matches" for not_in).
+    let msg = parse_err(&format!("{base}rule r -> B severity=1:\n  role in ,\n"));
+    assert!(msg.contains("at least one enum variant"), "{msg}");
+
+    let msg = parse_err(&format!("{base}rule r -> B severity=1 severity=2:\n"));
+    assert!(msg.contains("duplicate 'severity='"), "{msg}");
+
+    // Guards on these names would be read as headers or split at the wrong operator.
+    let msg = parse_err("pipeline p\ndefault A severity=0\nfield rule bool\n");
+    assert!(msg.contains("'rule' is a keyword"), "{msg}");
+    let msg = parse_err("pipeline p\ndefault A severity=0\nfield a<b int 0..3\n");
+    assert!(msg.contains("must not contain '<'"), "{msg}");
+}
+
+#[test]
+fn int_ranges_are_inclusive_at_both_ends() {
+    let p = parse_policy(
+        "pipeline p\ndefault Out severity=0\nfield x int 0..10\nrule r -> In severity=1:\n  x in 2..4\n",
+    )
+    .unwrap();
+    assert_eq!(p.schema.total_volume(), 11);
+    let inside: Vec<i64> = (0..=10)
+        .filter(|&x| p.eval(&[seam_atlas::Value::Int(x)]).0.label == "In")
+        .collect();
+    assert_eq!(inside, vec![2, 3, 4]);
+}
+
+fn run_cli(args: &[&str]) -> (Option<i32>, String, String) {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let out = Command::new(env!("CARGO_BIN_EXE_seam-atlas"))
+        .current_dir(root)
+        .args(args)
+        .output()
+        .unwrap();
+    (
+        out.status.code(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn cli_exit_codes_separate_changed_outcomes_from_errors() {
+    let (v1, v2) = ("policies/iam_v1.policy", "policies/iam_v2.policy");
+
+    // A diff without --fail-on-diff is a successful run.
+    let (code, stdout, _) = run_cli(&["diff", v1, v2]);
+    assert_eq!(code, Some(0));
+    assert!(
+        stdout.starts_with("CHANGED: 314572803 of 22649241816"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("rule require_prod_mfa"), "{stdout}");
+
+    let (code, _, _) = run_cli(&["diff", "--fail-on-diff", v1, v2]);
+    assert_eq!(code, Some(1));
+    let (code, stdout, _) = run_cli(&["diff", "--fail-on-diff", v1, v1]);
+    assert_eq!(code, Some(0));
+    assert!(stdout.starts_with("EQUIVALENT"), "{stdout}");
+
+    // Errors use 2, so `--fail-on-diff` in CI can tell "changed" from "broken".
+    let (code, _, stderr) = run_cli(&["diff", "--fail-on-diff", v1, "missing.policy"]);
+    assert_eq!(code, Some(2));
+    assert!(stderr.contains("cannot read 'missing.policy'"), "{stderr}");
+    let (code, _, stderr) = run_cli(&["diff", v1, "policies/clinical_v1.policy"]);
+    assert_eq!(code, Some(2));
+    assert!(stderr.contains("declare different fields"), "{stderr}");
+    let (code, _, stderr) = run_cli(&["cliffs", "Cargo.toml"]);
+    assert_eq!(code, Some(2));
+    assert!(stderr.starts_with("error: Cargo.toml:line "), "{stderr}");
+}
+
+#[test]
+fn cli_help_and_version() {
+    for args in [&["--help"][..], &["diff", "--help"], &["cliffs", "-h"]] {
+        let (code, stdout, _) = run_cli(args);
+        assert_eq!(code, Some(0), "{args:?}");
+        assert!(stdout.contains("exit status:"), "{stdout}");
+    }
+    let (code, stdout, _) = run_cli(&["--version"]);
+    assert_eq!(code, Some(0));
+    assert_eq!(
+        stdout.trim(),
+        format!("seam-atlas {}", env!("CARGO_PKG_VERSION"))
+    );
+    let (code, _, _) = run_cli(&[]);
+    assert_eq!(code, Some(2));
+}
