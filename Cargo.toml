@@ -1,0 +1,19 @@
+[package]
+name = "seam-atlas"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.81"
+license = "Apache-2.0"
+description = "Spec-free exhaustive behavioral diff and cliff-edge boundary compiler for deterministic rule engines and guardrails."
+repository = "https://github.com/san-digital/seam-atlas"
+readme = "README.md"
+keywords = ["verification", "policy", "guardrails", "rule-engine", "testing"]
+categories = ["development-tools::testing", "compilers", "mathematics"]
+
+[[bin]]
+name = "seam-atlas"
+path = "src/bin/seam_atlas.rs"
+
+[dependencies]
+
+[workspace]

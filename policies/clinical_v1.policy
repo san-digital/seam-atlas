@@ -1,0 +1,15 @@
+# Clinical paracetamol single-intake guardrail (v1: unbuffered sub-cutoff gap)
+pipeline paracetamol_triage
+default Routine severity=0
+
+field age_years int 0..120
+field dose int 0..10000
+field unit enum mcg,mg,g
+field hepatic_risk bool
+
+rule overdose_emergency -> Emergency severity=3:
+  scaled(dose, unit, mcg=1, mg=1000, g=1000000) >= 4000000
+
+rule infant_refer -> Escalate severity=2:
+  age_years == 0
+  scaled(dose, unit, mcg=1, mg=1000, g=1000000) > 60000

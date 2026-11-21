@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy (strict)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Release test suite and hygiene gate
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo test --release
+      - name: Independent Python CLI cross-check
+        run: python3 scripts/crosscheck.py

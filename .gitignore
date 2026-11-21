@@ -1,0 +1,6 @@
+/target/
+*.olean
+*.ilean
+*.c
+.DS_Store
+__pycache__/

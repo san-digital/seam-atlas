@@ -1,0 +1,35 @@
+# Cloud IAM policy over > 15 billion states (v1: prod MFA gate precedes auditor read)
+pipeline cloud_iam
+default Deny severity=2
+
+field role enum viewer,developer,auditor,admin
+field env enum dev,staging,prod
+field action enum read,write,delete
+field mfa bool
+field ip_zone enum corp,vpn,public
+field payload_bytes int 0..104857600
+
+rule block_oversized_write -> Deny severity=2:
+  action in write,delete
+  payload_bytes > 10485760
+
+rule block_public_delete -> Deny severity=3:
+  action == delete
+  ip_zone == public
+
+rule require_prod_mfa -> Deny severity=3:
+  env == prod
+  mfa == false
+
+rule allow_admin -> Allow severity=0:
+  role == admin
+  ip_zone in corp,vpn
+
+rule allow_auditor_read -> Allow severity=0:
+  role == auditor
+  action == read
+
+rule allow_dev_nonprod -> Allow severity=0:
+  role == developer
+  env in dev,staging
+  action in read,write
