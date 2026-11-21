@@ -26,7 +26,7 @@ impl CoordSpan {
                 if hi < lo {
                     0
                 } else {
-                    ((*hi as i128) - (*lo as i128) + 1) as u128
+                    ((*hi as i128) - (*lo as i128)) as u128 + 1
                 }
             }
             Self::BoolMask(m) => (m & 0b11).count_ones() as u128,
@@ -170,7 +170,9 @@ pub(crate) fn eval_pred_on_box(pred: &Pred, spans: &[CoordSpan]) -> TriEval {
             let CoordSpan::Int { lo, hi } = spans[*value_field] else {
                 return TriEval::AlwaysFalse;
             };
-            if scale > 0 && matches!(op, CmpOp::Eq | CmpOp::Ne) && rhs_scaled.rem_euclid(scale) != 0
+            if scale != 0
+                && matches!(op, CmpOp::Eq | CmpOp::Ne)
+                && rhs_scaled.rem_euclid(scale.abs()) != 0
             {
                 return if *op == CmpOp::Eq {
                     TriEval::AlwaysFalse
@@ -337,6 +339,22 @@ pub(crate) fn split_box_for_pred(spans: &[CoordSpan], pred: &Pred) -> Vec<Vec<Co
                 if scale > 0 {
                     // Convert `v * scale <op> rhs_scaled` into an exact integer split on `v`.
                     return split_scaled_positive(spans, *value_field, scale, *op, *rhs_scaled);
+                } else if scale < 0 {
+                    let flipped_op = match *op {
+                        CmpOp::Eq => CmpOp::Eq,
+                        CmpOp::Ne => CmpOp::Ne,
+                        CmpOp::Lt => CmpOp::Gt,
+                        CmpOp::Le => CmpOp::Ge,
+                        CmpOp::Gt => CmpOp::Lt,
+                        CmpOp::Ge => CmpOp::Le,
+                    };
+                    return split_scaled_positive(
+                        spans,
+                        *value_field,
+                        -scale,
+                        flipped_op,
+                        -*rhs_scaled,
+                    );
                 }
             }
             vec![]
@@ -441,12 +459,18 @@ fn split_scaled_positive(
         }
         CmpOp::Ge | CmpOp::Lt => {
             // `v * scale >= rhs_scaled` iff `v >= ceil(rhs_scaled / scale)`.
-            let thresh = q_ceil.clamp(lo as i128, (hi as i128) + 1) as i64;
+            if lo >= hi {
+                return vec![spans.to_vec()];
+            }
+            let thresh = q_ceil.clamp((lo as i128) + 1, hi as i128) as i64;
             split_int_cmp(spans, field, CmpOp::Ge, thresh)
         }
         CmpOp::Gt | CmpOp::Le => {
             // `v * scale <= rhs_scaled` iff `v <= floor(rhs_scaled / scale)`.
-            let thresh = q_floor.clamp((lo as i128) - 1, hi as i128) as i64;
+            if lo >= hi {
+                return vec![spans.to_vec()];
+            }
+            let thresh = q_floor.clamp(lo as i128, (hi as i128) - 1) as i64;
             split_int_cmp(spans, field, CmpOp::Le, thresh)
         }
     }

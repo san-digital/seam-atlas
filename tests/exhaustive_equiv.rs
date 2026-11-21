@@ -114,4 +114,21 @@ rule mid_range -> Warn severity=1:
     for c in cliffs {
         assert_ne!(pa.eval(&c.input_a).0, pa.eval(&c.input_b).0);
     }
+
+    // 5. Full i64::MIN..=i64::MAX interval with ScaledIntCmp does not overflow.
+    let extreme_src = "\
+pipeline extreme_i64
+default Allow severity=0
+
+field v int -9223372036854775808..9223372036854775807
+field u enum one,thousand
+
+rule cap -> Deny severity=3:
+  scaled(v, u, one=1, thousand=1000) >= 9000000000000000000000
+";
+    let p_ext = parse_policy(extreme_src).unwrap();
+    let part_ext = compile_partition(&p_ext);
+    assert_eq!(part_ext.total_volume(), 2 * (1u128 << 64));
+    let cliffs_ext = find_cliffs(&p_ext);
+    assert!(!cliffs_ext.is_empty());
 }

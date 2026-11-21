@@ -6,9 +6,11 @@ rust-version = "1.81"
 license = "Apache-2.0"
 description = "Spec-free exhaustive behavioral diff and cliff-edge boundary compiler for deterministic rule engines and guardrails."
 repository = "https://github.com/san-digital/seam-atlas"
+homepage = "https://github.com/san-digital/seam-atlas"
+documentation = "https://docs.rs/seam-atlas"
 readme = "README.md"
 keywords = ["verification", "policy", "guardrails", "rule-engine", "testing"]
-categories = ["development-tools::testing", "compilers", "mathematics"]
+categories = ["development-tools::testing", "command-line-utilities", "compilers", "mathematics"]
 
 [[bin]]
 name = "seam-atlas"

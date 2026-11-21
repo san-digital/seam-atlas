@@ -171,12 +171,12 @@ pub enum Pred {
 impl Pred {
     pub fn eval(&self, input: &[Value]) -> bool {
         match self {
-            Self::IntCmp { field, op, rhs } => match input[*field] {
-                Value::Int(x) => op.eval_i128(x as i128, *rhs as i128),
+            Self::IntCmp { field, op, rhs } => match input.get(*field) {
+                Some(Value::Int(x)) => op.eval_i128(*x as i128, *rhs as i128),
                 _ => false,
             },
-            Self::IntInRange { field, lo, hi } => match input[*field] {
-                Value::Int(x) => x >= *lo && x <= *hi,
+            Self::IntInRange { field, lo, hi } => match input.get(*field) {
+                Some(Value::Int(x)) => *x >= *lo && *x <= *hi,
                 _ => false,
             },
             Self::ScaledIntCmp {
@@ -185,24 +185,24 @@ impl Pred {
                 scales,
                 op,
                 rhs_scaled,
-            } => match (&input[*value_field], &input[*unit_field]) {
-                (Value::Int(v), Value::Enum(u)) => {
+            } => match (input.get(*value_field), input.get(*unit_field)) {
+                (Some(Value::Int(v)), Some(Value::Enum(u))) => {
                     let scale = scales.get(*u).copied().unwrap_or(0);
                     op.eval_i128((*v as i128) * scale, *rhs_scaled)
                 }
                 _ => false,
             },
-            Self::BoolEq { field, expected } => match input[*field] {
-                Value::Bool(b) => b == *expected,
+            Self::BoolEq { field, expected } => match input.get(*field) {
+                Some(Value::Bool(b)) => *b == *expected,
                 _ => false,
             },
             Self::EnumIn {
                 field,
                 variants,
                 negated,
-            } => match input[*field] {
-                Value::Enum(idx) => {
-                    let mem = variants.contains(&idx);
+            } => match input.get(*field) {
+                Some(Value::Enum(idx)) => {
+                    let mem = variants.contains(idx);
                     if *negated {
                         !mem
                     } else {

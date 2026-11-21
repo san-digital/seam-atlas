@@ -2,7 +2,20 @@
 
 Spec-free exhaustive behavioral diff and cliff-edge boundary compiler for deterministic rule engines, clinical/safety guardrails, and IAM policies.
 
-Zero runtime dependencies. `#![forbid(unsafe_code)]`. Backed by kernel-replayed Lean 4 soundness and completeness proofs in [`lean/SeamAtlas/`](lean/SeamAtlas) (documented in [`PROOF.md`](PROOF.md)).
+Zero runtime dependencies. `#![forbid(unsafe_code)]`. Backed by kernel-replayed Lean 4 soundness and completeness proofs in [`lean/SeamAtlas/`](https://github.com/san-digital/seam-atlas/tree/main/lean/SeamAtlas) (documented in [`PROOF.md`](https://github.com/san-digital/seam-atlas/blob/main/PROOF.md)).
+
+## Installation
+
+```sh
+cargo install seam-atlas
+```
+
+Or as a library dependency:
+
+```toml
+[dependencies]
+seam-atlas = "0.1"
+```
 
 ## Why This Exists
 
@@ -21,7 +34,7 @@ Formal verification tools usually stall in software teams because engineers do n
 cargo run --release -- cliffs policies/clinical_v1.policy
 ```
 
-Output on [`policies/clinical_v1.policy`](policies/clinical_v1.policy) (`7,260,726` total states):
+Output on [`policies/clinical_v1.policy`](https://github.com/san-digital/seam-atlas/blob/main/policies/clinical_v1.policy) (`7,260,726` total states):
 
 ```text
 pipeline 'paracetamol_triage' compiled into 8 disjoint regions (volume = 7260726)
@@ -39,7 +52,7 @@ Add `--json` to emit deterministic CI regression test vectors.
 cargo run --release -- diff policies/iam_v1.policy policies/iam_v2.policy
 ```
 
-Output on [`policies/iam_v1.policy`](policies/iam_v1.policy) vs [`policies/iam_v2.policy`](policies/iam_v2.policy) (`22,649,241,816` states, catching a rule-reordering refactor that placed `allow_auditor_read` above `require_prod_mfa`):
+Output on [`policies/iam_v1.policy`](https://github.com/san-digital/seam-atlas/blob/main/policies/iam_v1.policy) vs [`policies/iam_v2.policy`](https://github.com/san-digital/seam-atlas/blob/main/policies/iam_v2.policy) (`22,649,241,816` states, catching a rule-reordering refactor that placed `allow_auditor_read` above `require_prod_mfa`):
 
 ```text
 CHANGED: 314572803 of 22649241816 states altered across 1 equivalence classes:
@@ -116,4 +129,4 @@ MATHLIB_DIR=/path/to/mathlib4 ./lean/replay.sh
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE).
+Apache-2.0. See [`LICENSE`](https://github.com/san-digital/seam-atlas/blob/main/LICENSE).
