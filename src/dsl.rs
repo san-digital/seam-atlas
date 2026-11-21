@@ -1,10 +1,15 @@
+//! Parser for the `.policy` text format.
+
 use std::fmt;
 
 use crate::model::{CmpOp, Domain, FieldDef, Outcome, Pipeline, Pred, Rule, Schema};
 
+/// A policy file that could not be parsed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParseError {
+    /// 1-based line number. Errors about the whole file (such as a missing header) use line 1.
     pub line: usize,
+    /// What went wrong.
     pub message: String,
 }
 
@@ -16,7 +21,10 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-/// Parses a declarative `.policy` specification into a `Pipeline`.
+/// Parses the text of a `.policy` file into a [`Pipeline`].
+///
+/// The syntax is described in the crate README. Anything the parser cannot read
+/// unambiguously is an error, with the 1-based line number in [`ParseError::line`].
 pub fn parse_policy(src: &str) -> Result<Pipeline, ParseError> {
     let mut name: Option<String> = None;
     let mut default_outcome: Option<Outcome> = None;
@@ -141,18 +149,26 @@ fn parse_outcome_spec(ln: usize, spec: &str) -> Result<Outcome, ParseError> {
     let label = parts
         .next()
         .ok_or_else(|| err(ln, "missing outcome label"))?;
-    let mut severity = 0u8;
+    let mut severity: Option<u8> = None;
     for tok in parts {
         if let Some(sev_str) = tok.strip_prefix("severity=") {
-            severity = sev_str
-                .parse::<u8>()
-                .map_err(|_| err(ln, format!("invalid severity '{sev_str}'")))?;
+            if severity.is_some() {
+                return Err(err(ln, "duplicate 'severity=' attribute"));
+            }
+            severity = Some(
+                sev_str
+                    .parse::<u8>()
+                    .map_err(|_| err(ln, format!("invalid severity '{sev_str}'")))?,
+            );
         } else {
             return Err(err(ln, format!("unexpected outcome attribute '{tok}'")));
         }
     }
-    Ok(Outcome::new(label, severity))
+    Ok(Outcome::new(label, severity.unwrap_or(0)))
 }
+
+const KEYWORDS: [&str; 4] = ["pipeline", "default", "field", "rule"];
+const RESERVED_CHARS: &str = "=<>!,()";
 
 fn parse_field(ln: usize, spec: &str) -> Result<FieldDef, ParseError> {
     let mut parts = spec.split_whitespace();
@@ -160,6 +176,17 @@ fn parse_field(ln: usize, spec: &str) -> Result<FieldDef, ParseError> {
         .next()
         .ok_or_else(|| err(ln, "missing field name"))?
         .to_owned();
+    // A guard line is parsed by its leading keyword and its operator, so a field named
+    // `rule` or `a<b` would turn its own guards into something else.
+    if KEYWORDS.contains(&name.as_str()) {
+        return Err(err(ln, format!("'{name}' is a keyword, not a field name")));
+    }
+    if let Some(bad) = name.chars().find(|c| RESERVED_CHARS.contains(*c)) {
+        return Err(err(
+            ln,
+            format!("field name '{name}' must not contain '{bad}'"),
+        ));
+    }
     let kind = parts
         .next()
         .ok_or_else(|| err(ln, "missing field type ('int', 'bool', or 'enum')"))?;
@@ -339,6 +366,12 @@ fn parse_membership(
                 if !indices.contains(&idx) {
                     indices.push(idx);
                 }
+            }
+            if indices.is_empty() {
+                return Err(err(
+                    ln,
+                    "expected at least one enum variant after 'in'/'not_in'",
+                ));
             }
             indices.sort_unstable();
             Ok(Pred::EnumIn {
