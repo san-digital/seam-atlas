@@ -36,11 +36,17 @@ pub fn parse_policy(src: &str) -> Result<Pipeline, ParseError> {
             if pname.is_empty() {
                 return Err(err(ln, "missing pipeline name"));
             }
+            if name.is_some() {
+                return Err(err(ln, "duplicate 'pipeline' header"));
+            }
             name = Some(pname.to_owned());
             continue;
         }
 
         if let Some(rest) = line.strip_prefix("default ") {
+            if default_outcome.is_some() {
+                return Err(err(ln, "duplicate 'default' outcome"));
+            }
             default_outcome = Some(parse_outcome_spec(ln, rest.trim())?);
             continue;
         }
@@ -49,7 +55,11 @@ pub fn parse_policy(src: &str) -> Result<Pipeline, ParseError> {
             if current_rule.is_some() {
                 return Err(err(ln, "all field declarations must precede rules"));
             }
-            fields.push(parse_field(ln, rest.trim())?);
+            let field = parse_field(ln, rest.trim())?;
+            if fields.iter().any(|f| f.name == field.name) {
+                return Err(err(ln, format!("duplicate field '{}'", field.name)));
+            }
+            fields.push(field);
             continue;
         }
 
@@ -67,6 +77,9 @@ pub fn parse_policy(src: &str) -> Result<Pipeline, ParseError> {
             let id = rid.trim();
             if id.is_empty() {
                 return Err(err(ln, "empty rule id"));
+            }
+            if rules.iter().any(|r| r.id == id) {
+                return Err(err(ln, format!("duplicate rule id '{id}'")));
             }
             let outcome = parse_outcome_spec(ln, out_spec.trim())?;
             current_rule = Some(Rule {
@@ -171,15 +184,26 @@ fn parse_field(ln: usize, spec: &str) -> Result<FieldDef, ParseError> {
             Domain::IntRange { min, max }
         }
         "enum" => {
-            let list_tok = parts
-                .next()
-                .ok_or_else(|| err(ln, "expected comma-separated enum variants"))?;
-            let variants: Vec<String> = list_tok
-                .split(',')
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_owned)
-                .collect();
+            // The variant list is the rest of the line, so `a, b` and `a,b` both declare
+            // two variants. A space without a comma (`a b`) is rejected below.
+            let list: Vec<&str> = parts.by_ref().collect();
+            if list.is_empty() {
+                return Err(err(ln, "expected comma-separated enum variants"));
+            }
+            let joined = list.join(" ");
+            let mut variants: Vec<String> = Vec::new();
+            for item in joined.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                if item.contains(char::is_whitespace) {
+                    return Err(err(
+                        ln,
+                        format!("invalid enum variant '{item}': separate variants with commas"),
+                    ));
+                }
+                if variants.iter().any(|v| v == item) {
+                    return Err(err(ln, format!("duplicate enum variant '{item}'")));
+                }
+                variants.push(item.to_owned());
+            }
             if variants.is_empty() {
                 return Err(err(ln, "enum must list at least one variant"));
             }
@@ -187,6 +211,12 @@ fn parse_field(ln: usize, spec: &str) -> Result<FieldDef, ParseError> {
         }
         other => return Err(err(ln, format!("unknown field type '{other}'"))),
     };
+    if let Some(extra) = parts.next() {
+        return Err(err(
+            ln,
+            format!("unexpected token '{extra}' in field declaration"),
+        ));
+    }
     Ok(FieldDef { name, domain })
 }
 
@@ -335,9 +365,13 @@ fn parse_scaled_pred(ln: usize, schema: &Schema, rest: &str) -> Result<Pred, Par
     let value_field = lookup_field(ln, schema, vf_name)?;
     let unit_field = lookup_field(ln, schema, uf_name)?;
 
-    if !matches!(schema.fields[value_field].domain, Domain::IntRange { .. }) {
+    let Domain::IntRange {
+        min: value_min,
+        max: value_max,
+    } = schema.fields[value_field].domain
+    else {
         return Err(err(ln, "scaled(...) value field must have type int"));
-    }
+    };
     let Domain::Enum { ref variants } = schema.fields[unit_field].domain else {
         return Err(err(ln, "scaled(...) unit field must have type enum"));
     };
@@ -360,6 +394,25 @@ fn parse_scaled_pred(ln: usize, schema: &Schema, rest: &str) -> Result<Pred, Par
             .map_err(|_| err(ln, format!("invalid scale multiplier '{mult_s}'")))?;
         if mult <= 0 {
             return Err(err(ln, "scale multipliers must be positive"));
+        }
+        // Every product `value * multiplier` over the value field's domain must fit in `i128`;
+        // the endpoints bound all intermediate values because the product is monotone.
+        if (value_min as i128).checked_mul(mult).is_none()
+            || (value_max as i128).checked_mul(mult).is_none()
+        {
+            return Err(err(
+                ln,
+                format!(
+                    "scale multiplier '{}' overflows 128-bit arithmetic over field '{vf_name}'",
+                    mult_s.trim()
+                ),
+            ));
+        }
+        if scales[v_idx] != 0 {
+            return Err(err(
+                ln,
+                format!("duplicate multiplier for unit '{}'", vname.trim()),
+            ));
         }
         scales[v_idx] = mult;
     }
