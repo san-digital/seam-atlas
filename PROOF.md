@@ -19,9 +19,12 @@ All theorems compile against Mathlib4 (`v4.33.1`) and pass standalone kernel rep
 
 - `seam-atlas` is exact for deterministic first-match conjunctive rule pipelines over bounded 64-bit integer intervals (`IntRange`), unit-normalized products (`ScaledIntCmp`), booleans (`Bool`), and finite enumerations (`Enum`).
 - Non-linear cross-variable arithmetic (`x * y >= z` where both `x` and `y` are wide continuous integer intervals) or unbounded string regexes lie outside exact orthogonal cell refinement.
+- The Lean theorems are stated over an abstract pipeline and an arbitrary predicate-constant pointed cover. They do not model the Rust refinement itself: that `eval_pred_on_box` and `split_box_for_pred` produce a disjoint, predicate-constant cover of the whole schema is checked by [`tests/randomized_brute_force.rs`](tests/randomized_brute_force.rs), which compares `compile_partition`, `diff_pipelines`, and `find_cliffs` against exhaustive enumeration on 10,000 generated policies.
 
 ## Replaying Locally
 
 ```sh
 MATHLIB_DIR=/path/to/mathlib4 ./lean/replay.sh
 ```
+
+The `lean` CI job runs the same script against Mathlib `v4.33.1` on every push and pull request. The axiom audit accepts only `propext`, `Classical.choice`, and `Quot.sound`, so `sorryAx`, `Lean.ofReduceBool` (`native_decide`), and custom axioms all fail it.
