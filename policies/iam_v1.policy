@@ -1,4 +1,5 @@
-# Cloud IAM policy over > 15 billion states (v1: prod MFA gate precedes auditor read)
+# Example cloud access policy over 22,649,241,816 inputs.
+# v1: the prod MFA check comes before the auditor read rule.
 pipeline cloud_iam
 default Deny severity=2
 

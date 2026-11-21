@@ -67,7 +67,7 @@ fn clinical_guardrail_discovers_unit_flip_and_subcutoff_cliffs_and_verifies_v2_f
 }
 
 #[test]
-fn cloud_iam_catches_auditor_prod_mfa_bypass_across_15_billion_states() {
+fn cloud_iam_catches_auditor_prod_mfa_bypass_across_22_billion_states() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let iam1_src = fs::read_to_string(root.join("policies/iam_v1.policy")).unwrap();
     let iam2_src = fs::read_to_string(root.join("policies/iam_v2.policy")).unwrap();

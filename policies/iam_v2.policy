@@ -1,4 +1,5 @@
-# Cloud IAM policy (v2: defective rule reorder places auditor read above prod MFA gate)
+# Example cloud access policy, v2: a refactor that moved allow_auditor_read above
+# require_prod_mfa. `seam-atlas diff` shows this lets auditors read prod without MFA.
 pipeline cloud_iam
 default Deny severity=2
 
