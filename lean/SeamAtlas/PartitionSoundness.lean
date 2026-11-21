@@ -2,16 +2,18 @@ import Mathlib.Data.Set.Basic
 import Mathlib.Tactic
 
 /-!
-# Soundness and Completeness of Cell-Refinement Behavioral Diffs
+# Checking one point per cell decides a diff
 
-Formalizes the core reduction in `seam-atlas` (`src/partition.rs` and `src/diff.rs`):
-1. A deterministic `Pipeline` evaluates a priority-ordered list of conjunctive rules over
-   atomic predicates `sem : Pred -> Input -> Bool`, falling back to `defaultOutcome`.
-2. On any subset `C` of the input space where every atomic predicate appearing in a
-   pipeline is constant (`CellConstant`), `Pipeline.eval` is invariant across all `x, y in C`.
-3. Consequently, over any finite pointed cover `cells` of a domain `D`, checking only the
-   canonical witness `cr.2` of each cell `cr` is both **sound** and **complete** for deciding
-   `forall x in D, old.eval x = new.eval x` and for extracting a concrete discrepancy witness.
+An abstract model of the method behind `src/partition.rs` and `src/diff.rs`. It does not
+model the Rust code itself (see PROOF.md).
+
+1. A `Pipeline` tries an ordered list of rules, each a list of predicates
+   (`sem : Pred -> Input -> Bool`), and returns the first match or `defaultOutcome`.
+2. On any set `C` where every predicate the pipeline uses is constant (`CellConstant`),
+   `Pipeline.eval` gives the same result for all `x, y in C`.
+3. So for a finite cover of a domain `D` by such cells, each with a chosen point `cr.2`,
+   two pipelines agree on all of `D` exactly when they agree on every chosen point, and
+   any disagreement shows up at some chosen point.
 -/
 
 namespace SeamAtlas
@@ -30,7 +32,7 @@ structure Pipeline (π β : Type*) where
 def Rule.matches {π β α : Type*} (sem : π → α → Bool) (r : Rule π β) (x : α) : Bool :=
   r.whenAll.all (fun p => sem p x)
 
-/-- First-match evaluation of ` rules`, falling back to `defaultOutcome`. -/
+/-- First-match evaluation of `rules`, falling back to `defaultOutcome`. -/
 def evalRules {π β α : Type*} (sem : π → α → Bool) : List (Rule π β) → β → α → β
   | [], defOut, _ => defOut
   | r :: rs, defOut, x =>
@@ -94,8 +96,7 @@ theorem evalRules_eq_on_cell {π β α : Type*}
       · simp [hm]
       · simp [hm, ih htail_const]
 
-/-- Constant-cell invariance: any two inputs in a predicate-constant cell `C` produce
-identical pipeline outputs. -/
+/-- Any two inputs in a predicate-constant cell `C` get the same pipeline output. -/
 theorem pipeline_eval_eq_on_cell {π β α : Type*}
     (sem : π → α → Bool) (pl : Pipeline π β) {C : Set α}
     (hconst : CellConstant sem pl.preds C)
@@ -111,9 +112,8 @@ structure PointedCover (α : Type*) (D : Set α) where
   cell_sub : ∀ cr ∈ cells, cr.1 ⊆ D
   covers : ∀ x ∈ D, ∃ cr ∈ cells, x ∈ cr.1
 
-/-- Exhaustive behavioral equivalence: `old` and `new` agree on every point of `D`
-if and only if they agree on the single canonical witness `cr.2` of every cell in a
-predicate-constant pointed cover. -/
+/-- `old` and `new` agree on every point of `D` if and only if they agree on the chosen
+point `cr.2` of every cell in a predicate-constant pointed cover. -/
 theorem diff_sound_and_complete {π β α : Type*}
     (sem : π → α → Bool) (old new : Pipeline π β) {D : Set α}
     (cover : PointedCover α D)
@@ -132,8 +132,8 @@ theorem diff_sound_and_complete {π β α : Type*}
     rw [hold_eq, hnew_eq]
     exact hreps cr hcr_mem
 
-/-- Sound and complete counterexample extraction: if `old` and `new` differ anywhere on `D`,
-some canonical cell witness `cr.2 in D` exhibits `old.eval cr.2 != new.eval cr.2`. -/
+/-- If `old` and `new` differ anywhere on `D`, they differ at the chosen point `cr.2` of
+some cell. -/
 theorem diff_witness_complete {π β α : Type*}
     (sem : π → α → Bool) (old new : Pipeline π β) {D : Set α}
     (cover : PointedCover α D)

@@ -1,26 +1,31 @@
+//! Data types for parsed policies: fields, guards, rules and outcomes.
+
 use std::fmt;
 
-/// Typed scalar value for a single field of a rule-pipeline input.
+/// The value of one input field.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Value {
+    /// Value of an `int` field.
     Int(i64),
+    /// Value of a `bool` field.
     Bool(bool),
+    /// Index into the field's enum variant list (in declaration order).
     Enum(usize),
 }
 
-/// Finite domain for one input coordinate.
+/// The set of values one field can take.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Domain {
     /// Inclusive integer interval `[min, max]` with `min <= max`.
     IntRange { min: i64, max: i64 },
     /// Boolean coordinate (`false` or `true`).
     Bool,
-    /// Finite symbolic enumeration (`variants.len() >= 1`).
+    /// Named variants, at least one, in declaration order.
     Enum { variants: Vec<String> },
 }
 
 impl Domain {
-    /// Exact cardinality of this coordinate domain as `u128`.
+    /// Number of values in this domain. Never `None` for domains built by the parser.
     pub fn cardinality(&self) -> Option<u128> {
         match self {
             Self::IntRange { min, max } => {
@@ -35,6 +40,7 @@ impl Domain {
         }
     }
 
+    /// Renders `v` the way it would be written in a policy file.
     pub fn format_value(&self, v: &Value) -> String {
         match (self, v) {
             (Self::IntRange { .. }, Value::Int(x)) => x.to_string(),
@@ -48,25 +54,29 @@ impl Domain {
     }
 }
 
-/// Named field in a pipeline input schema.
+/// A named input field, from a `field` line.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FieldDef {
     pub name: String,
     pub domain: Domain,
 }
 
-/// Ordered input tuple schema `D_0 x D_1 x ... x D_{n-1}`.
+/// The input fields of a pipeline, in declaration order. An input is one value per field.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Schema {
     pub fields: Vec<FieldDef>,
 }
 
 impl Schema {
+    /// Position of the field called `name`.
     pub fn field_index(&self, name: &str) -> Option<usize> {
         self.fields.iter().position(|f| f.name == name)
     }
 
-    /// Exact total input-space point count across all coordinates, saturating at `u128::MAX` if huge.
+    /// Number of possible inputs (the product of the field domain sizes).
+    ///
+    /// Saturates at `u128::MAX` (about 3.4e38) for very large schemas, such as three
+    /// fields that each span the whole `i64` range.
     pub fn total_volume(&self) -> u128 {
         let mut prod = 1u128;
         for f in &self.fields {
@@ -76,6 +86,7 @@ impl Schema {
         prod
     }
 
+    /// True when `input` has one value per field and each value is in its field's domain.
     pub fn validate_input(&self, input: &[Value]) -> bool {
         if input.len() != self.fields.len() {
             return false;
@@ -94,6 +105,7 @@ impl Schema {
         true
     }
 
+    /// Renders `input` as `{name=value, ...}`.
     pub fn format_tuple(&self, input: &[Value]) -> String {
         let mut parts = Vec::with_capacity(self.fields.len());
         for (f, v) in self.fields.iter().zip(input.iter()) {
@@ -103,7 +115,7 @@ impl Schema {
     }
 }
 
-/// Relational operator for integer and unit-scaled predicates.
+/// Comparison operator for integer and `scaled(...)` guards.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CmpOp {
     Eq,
@@ -115,6 +127,7 @@ pub enum CmpOp {
 }
 
 impl CmpOp {
+    /// Applies the operator to `lhs` and `rhs`.
     #[inline]
     pub fn eval_i128(self, lhs: i128, rhs: i128) -> bool {
         match self {
@@ -142,14 +155,14 @@ impl fmt::Display for CmpOp {
     }
 }
 
-/// Atomic guard predicate in a rule conjunction.
+/// One guard line inside a rule.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Pred {
-    /// Compares `IntRange` field against `rhs`.
+    /// `field <op> rhs` on an `int` field.
     IntCmp { field: usize, op: CmpOp, rhs: i64 },
-    /// Inclusive range membership `lo <= x[field] <= hi`.
+    /// `field in lo..hi`, inclusive at both ends: `lo <= x[field] <= hi`.
     IntInRange { field: usize, lo: i64, hi: i64 },
-    /// Unit-normalized comparison `x[value_field] * scale(x[unit_field]) <op> rhs_scaled`,
+    /// `scaled(...)`: compares `x[value_field] * scale(x[unit_field]) <op> rhs_scaled`,
     /// where `scales` maps every enum index of `unit_field` to a positive multiplier.
     ///
     /// Every product `x[value_field] * scale` over the value field's domain must fit in `i128`.
@@ -162,9 +175,10 @@ pub enum Pred {
         op: CmpOp,
         rhs_scaled: i128,
     },
-    /// Compares `Bool` field against `expected`.
+    /// `field == expected` on a `bool` field (`!=` is stored as the negated value).
     BoolEq { field: usize, expected: bool },
-    /// Membership (or non-membership when `negated`) in a subset of `Enum` indices.
+    /// `field in a,b` on an enum field, or `not_in` when `negated`. `==` and `!=` use a
+    /// one-element list.
     EnumIn {
         field: usize,
         variants: Vec<usize>,
@@ -173,6 +187,7 @@ pub enum Pred {
 }
 
 impl Pred {
+    /// Evaluates the guard on one input. Returns `false` if a field has the wrong type.
     pub fn eval(&self, input: &[Value]) -> bool {
         match self {
             Self::IntCmp { field, op, rhs } => match input.get(*field) {
@@ -219,7 +234,9 @@ impl Pred {
     }
 }
 
-/// Decision outcome carrying a symbolic label and ordinal severity (`0..=255`).
+/// What a rule (or the default) returns: a label and a severity from 0 to 255.
+///
+/// Two outcomes are equal only if both the label and the severity match.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Outcome {
     pub label: String,
@@ -227,6 +244,7 @@ pub struct Outcome {
 }
 
 impl Outcome {
+    /// Creates an outcome.
     pub fn new(label: impl Into<String>, severity: u8) -> Self {
         Self {
             label: label.into(),
@@ -235,7 +253,7 @@ impl Outcome {
     }
 }
 
-/// Single conjunctive guard rule evaluated in priority order.
+/// A rule: it matches when every guard in `when_all` holds. A rule with no guards always matches.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rule {
     pub id: String,
@@ -243,7 +261,8 @@ pub struct Rule {
     pub outcome: Outcome,
 }
 
-/// Deterministic first-match rule pipeline over a typed input `Schema`.
+/// A parsed policy: rules are tried in order and the first match wins; if none match,
+/// `default_outcome` applies.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pipeline {
     pub name: String,
@@ -253,7 +272,9 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    /// Evaluates `input` directly against the ordered rules, returning `(outcome, matched_rule_id)`.
+    /// Evaluates one input, returning the outcome and the id of the matching rule
+    /// (`None` for the default). This is the reference that the other functions are
+    /// tested against.
     pub fn eval<'a>(&'a self, input: &[Value]) -> (&'a Outcome, Option<&'a str>) {
         debug_assert!(self.schema.validate_input(input));
         for rule in &self.rules {

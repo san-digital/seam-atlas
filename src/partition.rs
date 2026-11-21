@@ -1,6 +1,8 @@
+//! Splitting the input space into regions with a fixed outcome.
+
 use crate::model::{CmpOp, Domain, Outcome, Pipeline, Pred, Rule, Schema, Value};
 
-/// Contiguous atomic span along one coordinate.
+/// The values one field takes inside a [`LeafRegion`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CoordSpan {
     /// Inclusive integer interval `[lo, hi]`.
@@ -12,6 +14,7 @@ pub enum CoordSpan {
 }
 
 impl CoordSpan {
+    /// The span covering the whole domain.
     pub fn full_from_domain(domain: &Domain) -> Self {
         match domain {
             Domain::IntRange { min, max } => Self::Int { lo: *min, hi: *max },
@@ -20,6 +23,7 @@ impl CoordSpan {
         }
     }
 
+    /// Number of values in the span.
     pub fn cardinality(&self) -> u128 {
         match self {
             Self::Int { lo, hi } => {
@@ -34,7 +38,8 @@ impl CoordSpan {
         }
     }
 
-    /// Canonical deterministic witness value inside this non-empty span.
+    /// A fixed example value from this (non-empty) span: the smallest integer, `false`
+    /// before `true`, or the first enum variant.
     pub fn witness(&self) -> Value {
         match self {
             Self::Int { lo, .. } => Value::Int(*lo),
@@ -49,7 +54,7 @@ impl CoordSpan {
         }
     }
 
-    /// Returns a witness inside the intersection of `self` and `other`, if non-empty.
+    /// An example value that lies in both `self` and `other`, if they overlap.
     pub fn shared_witness(&self, other: &Self) -> Option<Value> {
         match (self, other) {
             (Self::Int { lo: l1, hi: h1 }, Self::Int { lo: l2, hi: h2 }) => {
@@ -84,7 +89,8 @@ impl CoordSpan {
     }
 }
 
-/// Disjoint leaf region in the input space where pipeline evaluation is constant.
+/// A box of inputs (one [`CoordSpan`] per field) that all get the same outcome from the
+/// same rule.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LeafRegion {
     pub spans: Vec<CoordSpan>,
@@ -93,6 +99,7 @@ pub struct LeafRegion {
 }
 
 impl LeafRegion {
+    /// Number of inputs in the region (saturating).
     pub fn volume(&self) -> u128 {
         let mut prod = 1u128;
         for s in &self.spans {
@@ -101,12 +108,13 @@ impl LeafRegion {
         prod
     }
 
+    /// An example input from the region, built from each span's [`CoordSpan::witness`].
     pub fn canonical_witness(&self) -> Vec<Value> {
         self.spans.iter().map(CoordSpan::witness).collect()
     }
 }
 
-/// Complete, pairwise-disjoint partition of a pipeline's input `Schema`.
+/// The regions of a pipeline: every input lies in exactly one region.
 #[derive(Clone, Debug)]
 pub struct Partition {
     pub schema: Schema,
@@ -114,6 +122,7 @@ pub struct Partition {
 }
 
 impl Partition {
+    /// Sum of the region volumes. Equals [`Schema::total_volume`] unless that saturates.
     pub fn total_volume(&self) -> u128 {
         let mut sum = 0u128;
         for r in &self.regions {
@@ -482,7 +491,11 @@ fn replace_span(spans: &[CoordSpan], field: usize, next: CoordSpan) -> Vec<Coord
     copy
 }
 
-/// Compiles `pipeline` into an exact, disjoint `Partition` covering 100% of `pipeline.schema`.
+/// Splits the whole input space of `pipeline` into regions that each get a single outcome.
+///
+/// The regions do not overlap and together contain every input. The work depends on how
+/// many regions the rules create, not on how many inputs there are. That number is small
+/// for typical policies but can grow exponentially with many overlapping rules.
 pub fn compile_partition(pipeline: &Pipeline) -> Partition {
     let root: Vec<CoordSpan> = pipeline
         .schema
