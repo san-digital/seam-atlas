@@ -151,6 +151,10 @@ pub enum Pred {
     IntInRange { field: usize, lo: i64, hi: i64 },
     /// Unit-normalized comparison `x[value_field] * scale(x[unit_field]) <op> rhs_scaled`,
     /// where `scales` maps every enum index of `unit_field` to a positive multiplier.
+    ///
+    /// Every product `x[value_field] * scale` over the value field's domain must fit in `i128`.
+    /// `parse_policy` rejects multipliers that break this; callers building `Pred` values
+    /// directly must uphold it themselves.
     ScaledIntCmp {
         value_field: usize,
         unit_field: usize,

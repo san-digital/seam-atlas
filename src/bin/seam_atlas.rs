@@ -38,6 +38,9 @@ fn run_cliffs(args: &[String]) -> ExitCode {
     for arg in args {
         if arg == "--json" {
             json_mode = true;
+        } else if arg.starts_with("--") {
+            eprint!("error: unknown option '{arg}'\n{}", usage());
+            return ExitCode::from(2);
         } else if path.is_none() {
             path = Some(arg.as_str());
         } else {
@@ -110,6 +113,10 @@ fn run_diff(args: &[String]) -> ExitCode {
         match arg.as_str() {
             "--json" => json_mode = true,
             "--fail-on-diff" => fail_on_diff = true,
+            other if other.starts_with("--") => {
+                eprint!("error: unknown option '{other}'\n{}", usage());
+                return ExitCode::from(2);
+            }
             _ => paths.push(arg.as_str()),
         }
     }

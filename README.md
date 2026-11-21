@@ -112,6 +112,8 @@ assert_eq!(diff.total_volume, 40_004);
   - Boolean: `<field> == true` / `false`, `!=`
   - Enum: `<field> == <variant>`, `!=`, `<field> in <v1>,<v2>`, `<field> not_in <v1>,<v2>`
 
+The parser rejects anything it would otherwise have to guess about, because a silently dropped token shrinks the domain that `diff` claims to cover: stray tokens after a field declaration, duplicate field names, enum variants, rule ids, `pipeline` or `default` headers, duplicate unit multipliers, and `scaled(...)` multipliers whose products over the value field's range overflow `i128`. Enum lists may use `a,b` or `a, b`.
+
 ## Verification
 
 ```sh
