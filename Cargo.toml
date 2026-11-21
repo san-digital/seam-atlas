@@ -4,13 +4,21 @@ version = "0.1.1"
 edition = "2021"
 rust-version = "1.81"
 license = "Apache-2.0"
-description = "Spec-free exhaustive behavioral diff and cliff-edge boundary compiler for deterministic rule engines and guardrails."
+description = "Compare two versions of a first-match rules file on every input, and find inputs where a one-step change flips the outcome."
 repository = "https://github.com/san-digital/seam-atlas"
 homepage = "https://github.com/san-digital/seam-atlas"
 documentation = "https://docs.rs/seam-atlas"
 readme = "README.md"
-keywords = ["verification", "policy", "guardrails", "rule-engine", "testing"]
-categories = ["development-tools::testing", "command-line-utilities", "compilers", "mathematics"]
+keywords = ["policy", "diff", "rule-engine", "verification", "testing"]
+categories = ["development-tools::testing", "command-line-utilities"]
+include = [
+    "/src",
+    "/tests",
+    "/policies",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+]
 
 [[bin]]
 name = "seam-atlas"
