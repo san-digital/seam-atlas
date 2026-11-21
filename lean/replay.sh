@@ -42,8 +42,14 @@ import SeamAtlas.CliffEdge
 EOS
 )"
   echo "$AXIOM_OUT"
-  if echo "$AXIOM_OUT" | grep -q "sorryAx"; then
-    echo "error: sorryAx detected in axiom footprint" >&2
+  # Long axiom lists wrap across lines, so join the output before extracting each list.
+  # Anything outside the three standard axioms (sorryAx, Lean.ofReduceBool from
+  # native_decide, or a custom axiom) fails the audit.
+  NONSTANDARD="$(printf "%s\n" "$AXIOM_OUT" | tr "\n" " " | grep -o "\[[^]]*\]" | tr -d "[]" \
+    | tr "," "\n" | sed "s/^ *//; s/ *$//" \
+    | grep -v -x -e "" -e "propext" -e "Classical.choice" -e "Quot.sound" || true)"
+  if [[ -n "$NONSTANDARD" ]]; then
+    echo "error: non-standard axioms in footprint: $(echo $NONSTANDARD)" >&2
     exit 1
   fi
 '
